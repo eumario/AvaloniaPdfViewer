@@ -68,13 +68,9 @@ public partial class PdfViewer : UserControl, IDisposable
     private readonly List<Zoom> _defaultZoomLevels =
     [
         AvaloniaPdfViewer.Zoom.Automatic,
-        0.25,
         0.5,
-        0.75,
         1,
-        1.25,
         1.5,
-        1.75,
         2,
         2.5,
         3,
@@ -229,6 +225,11 @@ public partial class PdfViewer : UserControl, IDisposable
     private void ZoomTo(Zoom zoom)
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
+        
+        if (zoom > 0 && zoom > 5)
+        {
+            zoom = 5;
+        }
         if (currentZoom == 0)
         {
             //todo calculate the current percentage zoom based on the relative size of the image
@@ -278,14 +279,14 @@ public partial class PdfViewer : UserControl, IDisposable
     private void ZoomOutButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom - 0.25;
+        var zoom = currentZoom - 0.5;
         ZoomTo(zoom);
     }
 
     private void ZoomInButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom + 0.25;
+        var zoom = currentZoom + 0.5;
         ZoomTo(zoom);
     }
 
@@ -302,15 +303,15 @@ public partial class PdfViewer : UserControl, IDisposable
         if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-            var zoom = currentZoom - 0.25;
-            ZoomTo(zoom);
-            var position = e.GetPosition(MainImageScrollViewer);
-            MainImageScrollViewer.Offset = position;
-        }
-        else if(e.ClickCount > 1 || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-        {
-            if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-            var zoom = currentZoom + 0.25;
+        var zoom = currentZoom - 0.5;
+        ZoomTo(zoom);
+        var position = e.GetPosition(MainImageScrollViewer);
+        MainImageScrollViewer.Offset = position;
+    }
+    else if(e.ClickCount > 1 || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+    {
+        if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
+        var zoom = currentZoom + 0.5;
             ZoomTo(zoom);
             var position = e.GetPosition(MainImageScrollViewer);
             MainImageScrollViewer.Offset = position;
