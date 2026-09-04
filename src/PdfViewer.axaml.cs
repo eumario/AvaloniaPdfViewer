@@ -46,6 +46,8 @@ public partial class PdfViewer : UserControl, IDisposable
             .Subscribe();
         
         InitializeComponent();
+
+        ZoomCombobox.SelectedIndex = ZoomLevels.IndexOf(AvaloniaPdfViewer.Zoom.Automatic);
     }
     
     private string? _source;
@@ -68,6 +70,8 @@ public partial class PdfViewer : UserControl, IDisposable
     private readonly List<Zoom> _defaultZoomLevels =
     [
         AvaloniaPdfViewer.Zoom.Automatic,
+        AvaloniaPdfViewer.Zoom.FitToSize,
+        AvaloniaPdfViewer.Zoom.FitToWidth,
         0.5,
         1,
         1.5,
@@ -199,9 +203,17 @@ public partial class PdfViewer : UserControl, IDisposable
         {
             PercentageZoom(zoom);
         }
-        else
+        else if (zoom == 0)
         {
             AutomaticZoom();
+        }
+        else if (zoom == AvaloniaPdfViewer.Zoom.FitToSize)
+        {
+            FitToSizeZoom();
+        }
+        else if (zoom == AvaloniaPdfViewer.Zoom.FitToWidth)
+        {
+            FitToWidthZoom();
         }
     }
 
@@ -215,6 +227,41 @@ public partial class PdfViewer : UserControl, IDisposable
         MainImage.Height = height;
         RaisePropertyChanged(ZoomProperty, oldValue: currentZoom, 0);
     }
+
+    private void FitToSizeZoom()
+    {
+        ApplyPercentage(ComputeFitPercentage(AvaloniaPdfViewer.Zoom.FitToSize));
+    }
+
+    private void FitToWidthZoom()
+    {
+        ApplyPercentage(ComputeFitPercentage(AvaloniaPdfViewer.Zoom.FitToWidth));
+    }
+
+    private double ComputeFitPercentage(Zoom mode)
+    {
+        if (PageSelector.Value == null) return 1;
+        var index = ((int)PageSelector.Value) - 1;
+        var imageSize = ThumbnailImages[index].Size;
+        var viewWidth = MainImageScrollViewer.Bounds.Size.Width;
+        var viewHeight = MainImageScrollViewer.Bounds.Size.Height;
+        if (viewWidth <= 0) return 1;
+        var widthRatio = viewWidth / imageSize.Width;
+        if (mode == AvaloniaPdfViewer.Zoom.FitToWidth || viewHeight <= 0) return widthRatio;
+        return Math.Min(widthRatio, viewHeight / imageSize.Height);
+    }
+
+    private void ApplyPercentage(double percentage)
+    {
+        if (percentage <= 0) return;
+        if (PageSelector.Value == null) return;
+        var index = ((int)PageSelector.Value) - 1;
+        var imageSize = ThumbnailImages[index].Size;
+        MainImage.Width = imageSize.Width * percentage;
+        MainImage.Height = imageSize.Height * percentage;
+        if (ZoomCombobox.SelectedItem is Zoom currentZoom)
+            RaisePropertyChanged(ZoomProperty, oldValue: currentZoom, percentage);
+    }
     
     public Zoom? Zoom
     {
@@ -226,48 +273,25 @@ public partial class PdfViewer : UserControl, IDisposable
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
         
-        if (zoom > 0 && zoom > 5)
-        {
-            zoom = 5;
-        }
-        if (currentZoom == 0)
-        {
-            //todo calculate the current percentage zoom based on the relative size of the image
-            if (PageSelector.Value == null) return;
-            var viewWidth = MainImageScrollViewer.Bounds.Size.Width;
-            var viewHeight = MainImageScrollViewer.Bounds.Size.Height;
-            var index = ((int)PageSelector.Value) - 1;
-            var imageSize = ThumbnailImages[index].Size;
-            
-            //todo clamp to nearest 25% increment
-        }
-        
+        if (zoom > 5) zoom = 5;
+
         if (!_defaultZoomLevels.Contains(currentZoom))
         {
             _zoomLevelsCache.Remove(currentZoom);
         }
-        if (zoom > 0)
+        if (zoom > 0 && !_defaultZoomLevels.Contains(zoom))
         {
-            if (!_defaultZoomLevels.Contains(zoom))
-            {
-                _zoomLevelsCache.Add(zoom);
-            }
-            
-            ZoomCombobox.SelectedIndex = ZoomLevels.IndexOf(zoom);
+            _zoomLevelsCache.Add(zoom);
         }
-        
+
+        var index = ZoomLevels.IndexOf(zoom);
+        if (index >= 0) ZoomCombobox.SelectedIndex = index;
+
         RaisePropertyChanged(ZoomProperty, oldValue: currentZoom, zoom);
     }
     private void PercentageZoom(double percentage)
     {
-        if (percentage <= 0) return;
-        if (PageSelector.Value == null) return;
-        if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var index = ((int)PageSelector.Value) - 1;
-        var imageSize = ThumbnailImages[index].Size;
-        MainImage.Width = imageSize.Width * percentage;
-        MainImage.Height = imageSize.Height * percentage;
-        RaisePropertyChanged(ZoomProperty, oldValue: currentZoom, percentage);
+        ApplyPercentage(percentage);
     }
 
     private void ZoomCombobox_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -279,21 +303,44 @@ public partial class PdfViewer : UserControl, IDisposable
     private void ZoomOutButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom - 0.5;
-        ZoomTo(zoom);
+        if (currentZoom.IsFitMode)
+        {
+            var zoom = Math.Round(CurrentEffectiveZoom() / 0.5) * 0.5 - 0.5;
+            if (zoom < 0.5) zoom = 0.5;
+            ZoomTo(zoom);
+        }
+        else
+        {
+            ZoomTo(currentZoom - 0.5);
+        }
     }
 
     private void ZoomInButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom + 0.5;
-        ZoomTo(zoom);
+        if (currentZoom.IsFitMode)
+        {
+            var zoom = Math.Round(CurrentEffectiveZoom() / 0.5) * 0.5 + 0.5;
+            if (zoom > 5) zoom = 5;
+            ZoomTo(zoom);
+        }
+        else
+        {
+            ZoomTo(currentZoom + 0.5);
+        }
+    }
+
+    private double CurrentEffectiveZoom()
+    {
+        if (ZoomCombobox.SelectedItem is Zoom zoom && zoom == AvaloniaPdfViewer.Zoom.FitToWidth)
+            return ComputeFitPercentage(AvaloniaPdfViewer.Zoom.FitToWidth);
+        return ComputeFitPercentage(AvaloniaPdfViewer.Zoom.FitToSize);
     }
 
     private void MainImageScrollViewer_OnSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        if (ZoomCombobox.SelectedItem is not Zoom zoom || zoom != 0) return;
-        AutomaticZoom();
+        if (ZoomCombobox.SelectedItem is not Zoom zoom) return;
+        if (zoom == 0 || zoom.IsFitMode) ApplyZoom();
     }
 
     private bool _pointerDown;
@@ -303,15 +350,19 @@ public partial class PdfViewer : UserControl, IDisposable
         if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom - 0.5;
-        ZoomTo(zoom);
-        var position = e.GetPosition(MainImageScrollViewer);
-        MainImageScrollViewer.Offset = position;
-    }
-    else if(e.ClickCount > 1 || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-    {
-        if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
-        var zoom = currentZoom + 0.5;
+            var zoom = currentZoom.IsFitMode
+                ? Math.Max(0.5, Math.Round(CurrentEffectiveZoom() / 0.5) * 0.5 - 0.5)
+                : currentZoom - 0.5;
+            ZoomTo(zoom);
+            var position = e.GetPosition(MainImageScrollViewer);
+            MainImageScrollViewer.Offset = position;
+        }
+        else if (e.ClickCount > 1 || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            if (ZoomCombobox.SelectedItem is not Zoom currentZoom) return;
+            var zoom = currentZoom.IsFitMode
+                ? Math.Min(5, Math.Round(CurrentEffectiveZoom() / 0.5) * 0.5 + 0.5)
+                : currentZoom + 0.5;
             ZoomTo(zoom);
             var position = e.GetPosition(MainImageScrollViewer);
             MainImageScrollViewer.Offset = position;

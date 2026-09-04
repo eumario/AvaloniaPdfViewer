@@ -7,6 +7,12 @@ public readonly struct Zoom : IComparable, IComparable<Zoom>, IEquatable<Zoom>
 
     public static Zoom Automatic => new Zoom(0, "Automatic");
 
+    public static Zoom FitToSize => new Zoom(-1, "Fit to Size");
+
+    public static Zoom FitToWidth => new Zoom(-2, "Fit to Width");
+
+    public bool IsFitMode => _value < 0;
+
     private Zoom(double value, string name)
     {
         _value = value;

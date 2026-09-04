@@ -14,5 +14,5 @@ internal static class PdfDocumentReflection
 
     public static object Load(Stream stream, string? password, bool disposeStream) => LoadMethod.Invoke(null, [stream, password, disposeStream])!;
 
-    public static IList<SizeF> PageSizes(object pdfDocument) => (IList<SizeF>)PageSizesProperty.GetValue(pdfDocument)!;
+    public static IReadOnlyList<SizeF> PageSizes(object pdfDocument) => (IReadOnlyList<SizeF>)PageSizesProperty.GetValue(pdfDocument)!;
 }
